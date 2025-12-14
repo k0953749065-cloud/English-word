@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>英文單字小助教</title>
+    <!-- 引入 React 和 Tailwind -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Nunito:wght@400;700;900&display=swap');
+        body { font-family: 'Nunito', 'Noto Sans TC', sans-serif; }
+        
+        /* 撒花動畫 */
+        @keyframes fall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+        }
+        .confetti-piece {
+            position: absolute;
+            top: -20px;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            animation: fall 1.5s linear forwards;
+        }
+        /* 自定義動畫 */
+        .animate-fade-in-down {
+            animation: fadeInDown 0.5s ease-out;
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 圖示組件 (SVG) ---
+        const Icon = ({ path, className, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+                {path}
+            </svg>
+        );
+
+        const Icons = {
+            BookOpen: (p) => <Icon path={<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>} {...p} />,
+            Edit3: (p) => <Icon path={<><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></>} {...p} />,
+            Star: (p) => <Icon path={<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />} {...p} />,
+            CheckCircle: (p) => <Icon path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} {...p} />,
+            XCircle: (p) => <Icon path={<><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></>} {...p} />,
+            ArrowRight: (p) => <Icon path={<><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>} {...p} />,
+            RotateCcw: (p) => <Icon path={<><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></>} {...p} />,
+            Award: (p) => <Icon path={<><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></>} {...p} />,
+            Lightbulb: (p) => <Icon path={<><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 16 8c0-2.21-1.79-4-4-4s-4 1.79-4 4c0 .88.36 1.68.93 2.25.27.27.46.64.65 1.25"/></>} {...p} />,
+            Volume2: (p) => <Icon path={<><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></>} {...p} />,
+            ClipboardList: (p) => <Icon path={<><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></>} {...p} />,
+            ChevronDown: (p) => <Icon path={<polyline points="6 9 12 15 18 9"/>} {...p} />,
+            ChevronUp: (p) => <Icon path={<polyline points="18 15 12 9 6 15"/>} {...p} />,
+            Mic: (p) => <Icon path={<><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>} {...p} />,
+            Square: (p) => <Icon path={<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>} {...p} />,
+            Play: (p) => <Icon path={<polygon points="5 3 19 12 5 21 5 3"/>} {...p} />,
+            Trash2: (p) => <Icon path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>} {...p} />,
+            Sparkles: (p) => <Icon path={<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/>} {...p} />,
+            Save: (p) => <Icon path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} {...p} />,
+            FolderOpen: (p) => <Icon path={<><path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/></>} {...p} />,
+            Home: (p) => <Icon path={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} {...p} />,
+            AlertTriangle: (p) => <Icon path={<><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} {...p} />,
+            ExternalLink: (p) => <Icon path={<><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>} {...p} />,
+            Plus: (p) => <Icon path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} {...p} />,
+            Download: (p) => <Icon path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} {...p} />
+        };
+
+        // --- 組件 ---
+
+        const Confetti = () => {
+            const particles = Array.from({ length: 50 }).map((_, i) => ({
+                id: i,
+                left: Math.random() * 100 + '%',
+                animationDelay: Math.random() * 0.5 + 's',
+                backgroundColor: ['#ef4444', '#22c55e', '#3b82f6', '#eab308', '#a855f7'][Math.floor(Math.random() * 5)],
+                rotation: Math.random() * 360 + 'deg',
+            }));
+
+            return (
+                <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+                    {particles.map(p => (
+                        <div key={p.id} className="confetti-piece"
+                            style={{
+                                left: p.left,
+                                backgroundColor: p.backgroundColor,
+                                animationDelay: p.animationDelay,
+                                transform: `rotate(${p.rotation})`
+                            }}
+                        />
+                    ))}
+                </div>
+            );
+        };
+
+        const AlphabetBackground = () => {
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+            const positions = [
+                { top: '5%', left: '5%', rot: -15, color: 'text-red-100' },
+                { top: '15%', left: '85%', rot: 10, color: 'text-blue-100' },
+                { top: '25%', left: '15%', rot: -5, color: 'text-green-100' },
+                { top: '10%', left: '45%', rot: 20, color: 'text-yellow-100' },
+                { top: '40%', left: '90%', rot: -10, color: 'text-purple-100' },
+                { top: '55%', left: '5%', rot: 15, color: 'text-pink-100' },
+                { top: '70%', left: '80%', rot: -20, color: 'text-orange-100' },
+                { top: '85%', left: '10%', rot: 5, color: 'text-indigo-100' },
+                { top: '90%', left: '50%', rot: -15, color: 'text-teal-100' },
+                { top: '60%', left: '20%', rot: 25, color: 'text-rose-100' },
+                { top: '35%', left: '55%', rot: -10, color: 'text-cyan-100' },
+                { top: '5%', left: '70%', rot: 15, color: 'text-emerald-100' },
+                { top: '80%', left: '35%', rot: -5, color: 'text-violet-100' },
+                { top: '20%', left: '30%', rot: 10, color: 'text-fuchsia-100' },
+                { top: '50%', left: '75%', rot: -25, color: 'text-lime-100' },
+                { top: '75%', left: '60%', rot: 20, color: 'text-sky-100' },
+                { top: '95%', left: '90%', rot: -10, color: 'text-amber-100' },
+                { top: '45%', left: '40%', rot: 5, color: 'text-slate-100' },
+                { top: '15%', left: '60%', rot: -15, color: 'text-gray-100' },
+                { top: '65%', left: '95%', rot: 10, color: 'text-red-50' },
+                { top: '30%', left: '90%', rot: -5, color: 'text-blue-50' },
+                { top: '85%', left: '70%', rot: 20, color: 'text-green-50' },
+                { top: '10%', left: '25%', rot: -10, color: 'text-purple-50' },
+                { top: '55%', left: '50%', rot: 15, color: 'text-yellow-50' },
+                { top: '90%', left: '20%', rot: -20, color: 'text-pink-50' },
+                { top: '40%', left: '10%', rot: 5, color: 'text-indigo-50' },
+            ];
+
+            return (
+                <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                    {letters.map((char, i) => (
+                        <div
+                            key={char}
+                            className={`absolute font-black select-none ${positions[i].color}`}
+                            style={{
+                                top: positions[i].top,
+                                left: positions[i].left,
+                                transform: `rotate(${positions[i].rot}deg)`,
+                                fontSize: `${(i % 4) + 4}rem`
+                            }}
+                        >
+                            {char}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const HomeButton = ({ onClick }) => (
+            <button
+                onClick={onClick}
+                className="absolute top-4 left-4 z-50 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg text-slate-600 hover:bg-white hover:text-orange-500 transition-all hover:scale-110 group border-2 border-slate-100"
+                title="回到主選單"
+            >
+                <Icons.Home size={24} />
+                <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    回主選單
+                </span>
+            </button>
+        );
+
+        const COMMON_SENTENCES = {
+            apple: "An _____ is red and sweet.",
+            banana: "Monkeys love to eat a _____.",
+            cat: "The _____ says meow.",
+            dog: "The _____ is man's best friend.",
+            elephant: "An _____ has a long nose.",
+            fish: "A _____ swims in the water.",
+            school: "We go to _____ to learn.",
+            teacher: "The _____ teaches us English.",
+            book: "I like to read a _____.",
+            pen: "I write with a _____.",
+            happy: "I am _____ because it is my birthday.",
+            sad: "Don't be _____, everything will be okay.",
+            run: "I can _____ very fast.",
+            eat: "I like to _____ pizza.",
+            big: "The elephant is very _____.",
+            small: "The mouse is very _____."
+        };
+
+        const DEFAULT_DEMO_DATA = `apple 蘋果
+banana 香蕉
+cat 貓
+dog 狗
+happy 快樂
+school 學校
+teacher 老師
+book 書本
+run 跑
+eat 吃`;
+
+        function App() {
+            const [mode, setMode] = useState('input');
+            const [rawInput, setRawInput] = useState('');
+            const [vocabList, setVocabList] = useState([]);
+            const [errorMsg, setErrorMsg] = useState('');
+            const [saveStatus, setSaveStatus] = useState('');
+            
+            const [studyIndex, setStudyIndex] = useState(0);
+            
+            const [userRecordings, setUserRecordings] = useState({});
+            const [isRecording, setIsRecording] = useState(false);
+            const mediaRecorderRef = useRef(null);
+            const audioChunksRef = useRef([]);
+
+            const [quizQueue, setQuizQueue] = useState([]);
+            const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+            const [userAnswer, setUserAnswer] = useState('');
+            const [quizState, setQuizState] = useState('waiting');
+            const [score, setScore] = useState(0);
+            const [wrongCount, setWrongCount] = useState(0);
+            
+            const [mistakeLog, setMistakeLog] = useState([]);
+            const [showTeacherReport, setShowTeacherReport] = useState(false);
+            
+            const inputRef = useRef(null);
+
+            useEffect(() => {
+                const lastInput = localStorage.getItem('vocab-assistant-last-input');
+                if (lastInput) {
+                    setRawInput(lastInput);
+                }
+            }, []);
+
+            // 下載目前網頁為 HTML 檔案
+            const downloadSelf = () => {
+                // 取得當前文件的 HTML 內容
+                const htmlContent = document.documentElement.outerHTML;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'english_vocab_assistant.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const playSuccessSound = () => {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContext) return;
+                    
+                    const ctx = new AudioContext();
+                    const oscillator1 = ctx.createOscillator();
+                    const oscillator2 = ctx.createOscillator();
+                    const gainNode = ctx.createGain();
+
+                    oscillator1.connect(gainNode);
+                    oscillator2.connect(gainNode);
+                    gainNode.connect(ctx.destination);
+
+                    oscillator1.type = 'sine';
+                    oscillator1.frequency.setValueAtTime(1046.5, ctx.currentTime); 
+                    oscillator2.type = 'sine';
+                    oscillator2.frequency.setValueAtTime(2093.0, ctx.currentTime); 
+
+                    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
+
+                    oscillator1.start();
+                    oscillator2.start();
+                    oscillator1.stop(ctx.currentTime + 1.0);
+                    oscillator2.stop(ctx.currentTime + 1.0);
+                } catch (e) {
+                    console.error("Audio play failed", e);
+                }
+            };
+
+            const speak = (text) => {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.8;
+                window.speechSynthesis.speak(utterance);
+            };
+
+            const handleStartRecording = async (word) => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorderRef.current = new MediaRecorder(stream);
+                    audioChunksRef.current = [];
+
+                    mediaRecorderRef.current.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunksRef.current.push(event.data);
+                        }
+                    };
+
+                    mediaRecorderRef.current.onstop = () => {
+                        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        setUserRecordings(prev => ({ ...prev, [word]: audioUrl }));
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorderRef.current.start();
+                    setIsRecording(true);
+                } catch (err) {
+                    console.error("Error accessing microphone:", err);
+                    alert("無法存取麥克風 😢\n請確認瀏覽器是否允許使用麥克風權限喔！");
+                }
+            };
+
+            const handleStopRecording = () => {
+                if (mediaRecorderRef.current && isRecording) {
+                    mediaRecorderRef.current.stop();
+                    setIsRecording(false);
+                }
+            };
+
+            const handlePlayRecording = (word) => {
+                const audioUrl = userRecordings[word];
+                if (audioUrl) {
+                    const audio = new Audio(audioUrl);
+                    audio.play();
+                }
+            };
+
+            const handleDeleteRecording = (word) => {
+                setUserRecordings(prev => {
+                    const newRecordings = { ...prev };
+                    delete newRecordings[word];
+                    return newRecordings;
+                });
+            };
+
+            const loadDemoData = () => {
+                setRawInput(DEFAULT_DEMO_DATA);
+                setErrorMsg('');
+                setSaveStatus('已載入預設範例！');
+                setTimeout(() => setSaveStatus(''), 2000);
+            };
+
+            const saveToFavorites = () => {
+                if (!rawInput.trim()) {
+                    setErrorMsg('請先輸入內容才能儲存喔！');
+                    return;
+                }
+                localStorage.setItem('vocab-assistant-favorites', rawInput);
+                setSaveStatus('✅ 已儲存為常用清單！');
+                setTimeout(() => setSaveStatus(''), 2000);
+            };
+
+            const loadFavorites = () => {
+                const favorites = localStorage.getItem('vocab-assistant-favorites');
+                if (favorites) {
+                    setRawInput(favorites);
+                    setErrorMsg('');
+                    setSaveStatus('📂 已載入常用清單！');
+                } else {
+                    setErrorMsg('還沒有儲存過常用清單喔！先輸入一些單字並儲存吧。');
+                }
+                setTimeout(() => setSaveStatus(''), 2000);
+            };
+
+            const getSpellingWarning = (word) => {
+                const lower = word.toLowerCase();
+                if (!/[aeiouy]/.test(lower)) return "好像沒有母音？";
+                if (/(.)\1\1/.test(lower)) return "重複字母太多？";
+                if (word.length < 2 && lower !== 'a' && lower !== 'i') return "單字太短？";
+                if (/[^a-z\-]/i.test(word)) return "含有非英文字元？";
+                return null;
+            };
+
+            const handleWordUpdate = (id, field, value) => {
+                setVocabList(prev => prev.map(word => {
+                    if (word.id !== id) return word;
+                    const newWord = { ...word, [field]: value };
+                    if (field === 'english') {
+                        const eng = value.replace(/[^a-zA-Z-]/g, '');
+                        newWord.english = eng;
+                        const lowerEng = eng.toLowerCase();
+                        if (COMMON_SENTENCES[lowerEng]) {
+                            newWord.sentenceBlank = COMMON_SENTENCES[lowerEng];
+                            newWord.sentence = newWord.sentenceBlank.replace('_____', eng);
+                        } else {
+                            newWord.sentence = `The word is ${eng}.`;
+                            newWord.sentenceBlank = `The word is _____.`;
+                        }
+                    }
+                    return newWord;
+                }));
+            };
+
+            const handleWordDelete = (id) => {
+                setVocabList(prev => prev.filter(w => w.id !== id));
+            };
+
+            const handleAddWord = () => {
+                const newId = Date.now().toString();
+                setVocabList(prev => [...prev, {
+                    id: newId,
+                    english: 'new',
+                    chinese: '新單字',
+                    sentence: 'The word is new.',
+                    sentenceBlank: 'The word is _____.'
+                }]);
+            };
+
+            const handleStart = () => {
+                setErrorMsg('');
+                if (!rawInput.trim()) {
+                    setErrorMsg('請先輸入一些單字喔！');
+                    return;
+                }
+                localStorage.setItem('vocab-assistant-last-input', rawInput);
+                const lines = rawInput.split('\n');
+                const parsedList = [];
+                lines.forEach((line, index) => {
+                    const cleanLine = line.replace(/[，,：:]/g, ' ').trim();
+                    const parts = cleanLine.split(/\s+/);
+                    if (parts.length >= 2) {
+                        let engRaw = '';
+                        let chiRaw = '';
+                        if (/[a-zA-Z]/.test(parts[0])) {
+                            engRaw = parts[0];
+                            chiRaw = parts.slice(1).join(' ');
+                        } else if (/[a-zA-Z]/.test(parts[parts.length - 1])) {
+                            engRaw = parts[parts.length - 1];
+                            chiRaw = parts.slice(0, parts.length - 1).join(' ');
+                        } else {
+                            engRaw = parts[0];
+                            chiRaw = parts.slice(1).join(' ');
+                        }
+                        const eng = engRaw.replace(/[^a-zA-Z-]/g, '');
+                        const chi = chiRaw;
+                        const lowerEng = eng.toLowerCase();
+                        let sentence = `This is a ${eng}.`;
+                        let sentenceBlank = `This is a _____.`;
+                        if (COMMON_SENTENCES[lowerEng]) {
+                            sentenceBlank = COMMON_SENTENCES[lowerEng];
+                            sentence = sentenceBlank.replace('_____', eng);
+                        } else {
+                            sentence = `The word is ${eng}.`;
+                            sentenceBlank = `The word is _____.`;
+                        }
+                        if (eng && chi) {
+                            parsedList.push({
+                                id: `word-${index}-${Date.now()}`,
+                                english: eng,
+                                chinese: chi,
+                                sentence: sentence,
+                                sentenceBlank: sentenceBlank
+                            });
+                        }
+                    }
+                });
+                if (parsedList.length > 0) {
+                    setVocabList(parsedList);
+                    setMode('preview');
+                } else {
+                    setErrorMsg("格式看起來不太對 🤔 請確認每一行都有「英文」和「中文」喔！");
+                }
+            };
+
+            const startStudy = () => {
+                setStudyIndex(0);
+                setMode('study');
+            };
+
+            const shuffleList = (array) => {
+                const newArr = [...array];
+                for (let i = newArr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+                }
+                return newArr;
+            };
+
+            const startQuiz = () => {
+                const shuffled = shuffleList(vocabList);
+                setQuizQueue(shuffled);
+                setCurrentQuizIndex(0);
+                setScore(0);
+                setWrongCount(0);
+                setMistakeLog([]); 
+                setShowTeacherReport(false);
+                setQuizState('waiting');
+                setUserAnswer('');
+                setMode('quiz');
+            };
+
+            const checkAnswer = (e) => {
+                if (e) e.preventDefault();
+                if (quizState === 'practice') {
+                    if (userAnswer.trim().toLowerCase() === quizQueue[currentQuizIndex].english.toLowerCase()) {
+                        goNextQuestion();
+                    }
+                    return;
+                }
+                if (quizState !== 'waiting' && quizState !== 'wrong1') return;
+                const currentWord = quizQueue[currentQuizIndex];
+                const isCorrect = userAnswer.trim().toLowerCase() === currentWord.english.toLowerCase();
+                if (isCorrect) {
+                    setQuizState('correct');
+                    if (wrongCount === 0) setScore(s => s + 100 / quizQueue.length);
+                    playSuccessSound();
+                    setTimeout(() => {
+                        goNextQuestion();
+                    }, 1500);
+                } else {
+                    const newWrongCount = wrongCount + 1;
+                    setWrongCount(newWrongCount);
+                    setMistakeLog(prev => [...prev, {
+                        word: currentWord,
+                        wrongInput: userAnswer.trim() || "(未輸入)"
+                    }]);
+                    if (newWrongCount === 1) {
+                        setQuizState('wrong1');
+                        inputRef.current?.focus();
+                    } else {
+                        setQuizState('wrong2');
+                        setTimeout(() => {
+                            setQuizState('practice');
+                            setUserAnswer('');
+                            inputRef.current?.focus();
+                        }, 2000);
+                    }
+                }
+            };
+
+            const goNextQuestion = () => {
+                if (currentQuizIndex < quizQueue.length - 1) {
+                    setCurrentQuizIndex(prev => prev + 1);
+                    setQuizState('waiting');
+                    setWrongCount(0);
+                    setUserAnswer('');
+                    setTimeout(() => inputRef.current?.focus(), 100);
+                } else {
+                    setMode('result');
+                }
+            };
+
+            const goHome = () => {
+                setMode('menu');
+            };
+
+            // --- RENDER ---
+
+            if (mode === 'input') {
+                return (
+                    <div className="min-h-screen bg-yellow-50 flex flex-col items-center justify-center p-4 font-sans text-slate-800 relative overflow-hidden">
+                        <AlphabetBackground />
+                        
+                        {/* 下載按鈕 (New) */}
+                        <div className="absolute top-4 right-4 z-50">
+                            <button 
+                                onClick={downloadSelf}
+                                className="bg-white/80 hover:bg-white text-slate-600 hover:text-blue-600 px-4 py-2 rounded-full shadow-sm text-sm font-bold flex items-center gap-2 transition-all border border-slate-200"
+                                title="下載這個網頁到電腦"
+                            >
+                                <Icons.Download size={18} />
+                                <span>下載網頁檔案</span>
+                            </button>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-lg border-b-4 border-yellow-400 z-10 relative">
+                            <div className="flex items-center justify-center mb-6">
+                                <div className="bg-yellow-400 p-3 rounded-full text-white mr-3">
+                                    <Icons.BookOpen size={32} />
+                                </div>
+                                <h1 className="text-2xl font-bold text-slate-800">英文單字小助教</h1>
+                            </div>
+                            
+                            <p className="mb-4 text-slate-600 text-center">
+                                👋 嗨！我是你的小助教。請輸入今天要練習的單字清單吧！<br/>
+                                <span className="text-sm text-slate-400">(格式：apple 蘋果)</span>
+                            </p>
+
+                            <div className="relative">
+                                <textarea
+                                    className={`w-full h-48 p-4 border-2 rounded-xl focus:outline-none focus:border-yellow-400 mb-2 bg-slate-50 text-lg ${errorMsg ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                                    placeholder="apple 蘋果&#10;banana 香蕉&#10;happy 快樂的"
+                                    value={rawInput}
+                                    onChange={(e) => {
+                                        setRawInput(e.target.value);
+                                        if (errorMsg) setErrorMsg('');
+                                    }}
+                                />
+                                {saveStatus && (
+                                    <div className="absolute top-2 right-4 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold animate-fade-in-down shadow-sm border border-green-200">
+                                        {saveStatus}
+                                    </div>
+                                )}
+                            </div>
+
+                            {errorMsg && (
+                                <div className="mb-4 text-red-500 font-bold flex items-center justify-center gap-2 animate-pulse">
+                                    <Icons.XCircle size={20} />
+                                    <span>{errorMsg}</span>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                                <button onClick={loadDemoData} className="flex flex-col items-center justify-center py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors">
+                                    <Icons.Sparkles size={16} className="mb-1 text-yellow-500" />
+                                    載入範例
+                                </button>
+                                <button onClick={saveToFavorites} className="flex flex-col items-center justify-center py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors">
+                                    <Icons.Save size={16} className="mb-1 text-blue-500" />
+                                    存為常用
+                                </button>
+                                <button onClick={loadFavorites} className="flex flex-col items-center justify-center py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors">
+                                    <Icons.FolderOpen size={16} className="mb-1 text-orange-500" />
+                                    載入常用
+                                </button>
+                            </div>
+                                
+                            <button onClick={handleStart} className="w-full bg-yellow-400 hover:bg-yellow-500 text-white font-bold py-3 px-4 rounded-xl transition-all transform hover:scale-105 shadow-md flex items-center justify-center gap-2">
+                                <Icons.CheckCircle size={20} />
+                                確認清單，下一步
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (mode === 'preview') {
+                return (
+                    <div className="min-h-screen bg-indigo-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                        <AlphabetBackground />
+                        
+                        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-2xl border-b-4 border-indigo-400 z-10 relative flex flex-col max-h-[85vh]">
+                            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+                                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                    <Icons.ClipboardList className="text-indigo-500" />
+                                    請確認單字清單 ({vocabList.length})
+                                </h2>
+                                <span className="text-xs text-slate-400">點擊文字可修改</span>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-2 mb-4">
+                                {vocabList.map((word, idx) => {
+                                    const warning = getSpellingWarning(word.english);
+                                    return (
+                                        <div key={word.id} className="flex items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 group hover:border-indigo-200 transition-colors">
+                                            <span className="text-slate-400 font-mono text-sm w-6">{idx + 1}.</span>
+                                            
+                                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <div className="relative">
+                                                    <input 
+                                                        value={word.english}
+                                                        onChange={(e) => handleWordUpdate(word.id, 'english', e.target.value)}
+                                                        className={`w-full bg-white border rounded px-2 py-1 font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${warning ? 'border-yellow-400 bg-yellow-50' : 'border-slate-300'}`}
+                                                    />
+                                                    {warning && (
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-yellow-500" title={warning}>
+                                                            <Icons.AlertTriangle size={16} />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <input 
+                                                    value={word.chinese}
+                                                    onChange={(e) => handleWordUpdate(word.id, 'chinese', e.target.value)}
+                                                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                                />
+                                            </div>
+
+                                            <div className="flex gap-1">
+                                                <a 
+                                                    href={`https://translate.google.com.tw/?sl=en&tl=zh-TW&text=${word.english}&op=translate`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                                                    title="Google 翻譯查詢"
+                                                >
+                                                    <Icons.ExternalLink size={16} />
+                                                </a>
+                                                <button 
+                                                    onClick={() => handleWordDelete(word.id)}
+                                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                    title="刪除"
+                                                >
+                                                    <Icons.Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex gap-3 mt-auto">
+                                <button onClick={() => setMode('input')} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg font-bold transition-colors">
+                                    回上一步
+                                </button>
+                                <button onClick={handleAddWord} className="px-4 py-2 bg-indigo-100 text-indigo-600 hover:bg-indigo-200 rounded-lg font-bold transition-colors flex items-center gap-1">
+                                    <Icons.Plus size={18} /> 新增單字
+                                </button>
+                                <button onClick={() => setMode('menu')} className="flex-1 bg-indigo-500 text-white hover:bg-indigo-600 rounded-lg font-bold py-3 shadow-md transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2">
+                                    <Icons.CheckCircle size={20} />
+                                    確認無誤，開始！
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (mode === 'menu') {
+                return (
+                    <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                        <AlphabetBackground />
+                        
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-b-4 border-blue-400 z-10 relative">
+                            <h2 className="text-2xl font-bold mb-2">準備好囉！👌</h2>
+                            <p className="text-slate-600 mb-8">
+                                我們總共有 {vocabList.length} 個單字。<br/>
+                                已經確認拼寫無誤！
+                            </p>
+                            
+                            <div className="space-y-4">
+                                <button onClick={startStudy} className="w-full bg-sky-400 hover:bg-sky-500 text-white font-bold py-4 px-6 rounded-xl shadow-md flex items-center justify-center gap-3 transition-all transform hover:-translate-y-1">
+                                    <Icons.BookOpen size={24} />
+                                    <div className="text-left">
+                                        <div className="text-lg">📖 學習模式</div>
+                                        <div className="text-xs opacity-90">先複習一下單字卡</div>
+                                    </div>
+                                </button>
+
+                                <button onClick={startQuiz} className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-4 px-6 rounded-xl shadow-md flex items-center justify-center gap-3 transition-all transform hover:-translate-y-1">
+                                    <Icons.Edit3 size={24} />
+                                    <div className="text-left">
+                                        <div className="text-lg">✍️ 隨機測驗</div>
+                                        <div className="text-xs opacity-90">準備好接受挑戰了嗎？</div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <button onClick={() => setMode('input')} className="mt-6 text-slate-400 hover:text-slate-600 underline text-sm">
+                                重設單字清單
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (mode === 'study') {
+                const currentWord = vocabList[studyIndex];
+                const isLast = studyIndex === vocabList.length - 1;
+                const hasRecording = !!userRecordings[currentWord.english];
+
+                return (
+                    <div className="min-h-screen bg-sky-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                        <AlphabetBackground />
+                        <HomeButton onClick={goHome} />
+
+                        <div className="w-full max-w-md mb-4 flex justify-between items-center text-sky-800 font-bold z-10 relative">
+                            <span>學習進度</span>
+                            <span>{studyIndex + 1} / {vocabList.length}</span>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border-b-8 border-sky-400 flex flex-col items-center justify-center text-center relative overflow-hidden z-10">
+                            
+                            <div className="mb-2 text-sm text-sky-500 font-bold uppercase tracking-wider">Word Card</div>
+                            
+                            <div className="flex items-center justify-center gap-3 mb-2">
+                                <h2 className="text-5xl font-bold text-slate-800">{currentWord.english}</h2>
+                                <button onClick={() => speak(currentWord.english)} className="p-3 bg-sky-100 text-sky-600 rounded-full hover:bg-sky-200 transition-colors shadow-sm" title="聽標準發音">
+                                    <Icons.Volume2 size={28} />
+                                </button>
+                            </div>
+
+                            <h3 className="text-2xl text-slate-600 mb-6 font-medium">{currentWord.chinese}</h3>
+
+                            <div className="w-full bg-slate-50 rounded-xl p-3 mb-6 border border-slate-200">
+                                <div className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-wide">口說練習室 (Shadowing)</div>
+                                <div className="flex items-center justify-center gap-4">
+                                    {!isRecording ? (
+                                        <button onClick={() => handleStartRecording(currentWord.english)} className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-white shadow-sm transition-all ${hasRecording ? 'bg-slate-400 hover:bg-slate-500' : 'bg-red-500 hover:bg-red-600'}`}>
+                                            <Icons.Mic size={18} />
+                                            {hasRecording ? '重錄' : '錄音'}
+                                        </button>
+                                    ) : (
+                                        <button onClick={handleStopRecording} className="flex items-center gap-2 px-4 py-2 rounded-full font-bold bg-slate-800 text-white animate-pulse">
+                                            <Icons.Square size={18} fill="white" />
+                                            停止
+                                        </button>
+                                    )}
+
+                                    {hasRecording && !isRecording && (
+                                        <>
+                                            <button onClick={() => handlePlayRecording(currentWord.english)} className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-sm transition-all" title="播放我的錄音">
+                                                <Icons.Play size={20} fill="white" />
+                                            </button>
+                                            <button onClick={() => handleDeleteRecording(currentWord.english)} className="p-2 text-slate-400 hover:text-red-400 transition-all" title="刪除錄音">
+                                                <Icons.Trash2 size={18} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                                {isRecording && <div className="mt-2 text-red-500 text-xs font-bold animate-pulse">🔴 錄音中...</div>}
+                            </div>
+                            
+                            <div className="bg-sky-50 p-4 rounded-xl w-full cursor-pointer hover:bg-sky-100 transition-colors" onClick={() => speak(currentWord.sentence)}>
+                                <p className="text-sky-800 italic text-lg">"{currentWord.sentence}"</p>
+                                <p className="text-xs text-sky-400 mt-2 text-right">(點擊唸例句)</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex gap-4 w-full max-w-md z-10 relative">
+                            {studyIndex > 0 && (
+                                <button onClick={() => { setIsRecording(false); setStudyIndex(prev => prev - 1); }} className="flex-1 bg-white text-slate-600 font-bold py-3 rounded-xl shadow-sm hover:bg-slate-50 transition-colors">
+                                    上一張
+                                </button>
+                            )}
+                            
+                            {!isLast ? (
+                                <button onClick={() => { setIsRecording(false); setStudyIndex(prev => prev + 1); }} className="flex-1 bg-sky-500 text-white font-bold py-3 rounded-xl shadow-md hover:bg-sky-600 transition-colors flex items-center justify-center gap-2">
+                                    下一張 <Icons.ArrowRight size={20}/>
+                                </button>
+                            ) : (
+                                <button onClick={() => { setIsRecording(false); setMode('menu'); }} className="flex-1 bg-green-500 text-white font-bold py-3 rounded-xl shadow-md hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+                                    看完囉！去選單 <Icons.CheckCircle size={20}/>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (mode === 'quiz') {
+                const currentWord = quizQueue[currentQuizIndex];
+                const progress = ((currentQuizIndex) / quizQueue.length) * 100;
+
+                return (
+                    <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-4 overflow-hidden relative">
+                        <AlphabetBackground />
+                        <HomeButton onClick={goHome} />
+
+                        {quizState === 'correct' && <Confetti />}
+
+                        <div className="w-full max-w-md h-3 bg-gray-200 rounded-full mb-6 overflow-hidden z-10 relative">
+                            <div className="h-full bg-orange-400 transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-b-8 border-orange-400 text-center relative z-10">
+                            
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-sm font-bold">Q{currentQuizIndex + 1}</span>
+                                <span className="text-slate-400 text-sm">還剩 {quizQueue.length - currentQuizIndex} 題</span>
+                            </div>
+
+                            <h2 className="text-3xl font-bold text-slate-800 mb-6">{currentWord.chinese}</h2>
+                            
+                            <div className="bg-slate-50 p-4 rounded-xl mb-6 text-lg text-slate-600">
+                                {currentWord.sentenceBlank}
+                            </div>
+
+                            <form onSubmit={checkAnswer} className="relative">
+                                <input
+                                    ref={inputRef}
+                                    type="text"
+                                    autoFocus
+                                    disabled={quizState === 'correct' || quizState === 'wrong2'}
+                                    value={userAnswer}
+                                    onChange={(e) => setUserAnswer(e.target.value)}
+                                    placeholder="請輸入英文單字..."
+                                    className={`w-full p-4 text-center text-xl border-2 rounded-xl focus:outline-none transition-all
+                                        ${quizState === 'wrong1' ? 'border-red-400 bg-red-50' : 'border-slate-200 focus:border-orange-400'}
+                                        ${quizState === 'correct' ? 'border-green-400 bg-green-50 text-green-700' : ''}
+                                        ${quizState === 'practice' ? 'border-blue-400 ring-2 ring-blue-200' : ''}
+                                    `}
+                                />
+                                
+                                {quizState === 'wrong1' && (
+                                    <div className="mt-3 text-red-500 font-bold flex items-center justify-center gap-2 animate-bounce">
+                                        <Icons.Lightbulb size={20} />
+                                        <span>哎呀，差一點點！提示：字首是 {currentWord.english.charAt(0).toUpperCase()}...</span>
+                                    </div>
+                                )}
+
+                                {quizState === 'wrong2' && (
+                                    <div className="mt-3 text-red-600 font-bold flex items-center justify-center gap-2">
+                                        <span>正確答案是：{currentWord.english}</span>
+                                        <button type="button" onClick={() => speak(currentWord.english)} className="p-1 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors">
+                                            <Icons.Volume2 size={16} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {quizState === 'practice' && (
+                                    <div className="mt-3 text-blue-600 font-bold flex flex-col items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span>請再練習輸入一次：{currentWord.english}</span>
+                                            <button type="button" onClick={() => speak(currentWord.english)} className="p-1 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors">
+                                                <Icons.Volume2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {quizState === 'correct' && (
+                                    <div className="mt-3 text-green-600 font-bold flex items-center justify-center gap-2">
+                                        <Icons.Star size={24} className="fill-green-600" />
+                                        <span>太棒了！答對了！🎉</span>
+                                        <button type="button" onClick={() => speak(currentWord.english)} className="p-1 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors">
+                                            <Icons.Volume2 size={16} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button type="submit" disabled={!userAnswer || quizState === 'correct' || quizState === 'wrong2'} className={`mt-6 w-full py-3 rounded-xl font-bold text-white shadow-md transition-all ${quizState === 'waiting' || quizState === 'wrong1' ? 'bg-orange-400 hover:bg-orange-500' : ''} ${quizState === 'practice' ? 'bg-blue-400 hover:bg-blue-500' : ''} ${quizState === 'correct' || quizState === 'wrong2' ? 'bg-gray-300 cursor-not-allowed' : ''}`}>
+                                    {quizState === 'practice' ? '我寫好了！' : '送出答案'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (mode === 'result') {
+                const finalScore = Math.round(score);
+                let message = "";
+                if (finalScore === 100) message = "太神啦！全部答對！🌟🌟🌟";
+                else if (finalScore >= 80) message = "做得很好！繼續保持！💪";
+                else if (finalScore >= 60) message = "不錯喔！再多練習幾次會更棒！👍";
+                else message = "沒關係，我們再練習一次吧！🌱";
+
+                const hasMistakes = mistakeLog.length > 0;
+
+                return (
+                    <div className="min-h-screen bg-purple-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                        <AlphabetBackground />
+                        <HomeButton onClick={goHome} />
+
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-b-8 border-purple-400 my-4 z-10 relative">
+                            <div className="mb-6 flex justify-center">
+                                <div className="bg-purple-100 p-4 rounded-full">
+                                    <Icons.Award size={64} className="text-purple-600" />
+                                </div>
+                            </div>
+                            
+                            <h2 className="text-3xl font-bold text-slate-800 mb-2">測驗結束！</h2>
+                            <div className="text-6xl font-black text-purple-600 mb-4">{finalScore} <span className="text-2xl text-slate-400">分</span></div>
+                            
+                            <p className="text-lg text-slate-600 font-medium mb-8">{message}</p>
+
+                            {hasMistakes && (
+                                <div className="mb-6">
+                                    <button onClick={() => setShowTeacherReport(!showTeacherReport)} className="text-slate-500 text-sm font-bold flex items-center justify-center gap-2 mx-auto hover:text-slate-700 transition-colors">
+                                        {showTeacherReport ? <Icons.ChevronUp size={16} /> : <Icons.ChevronDown size={16} />}
+                                        📊 老師專用：查看錯誤分析 ({mistakeLog.length})
+                                    </button>
+
+                                    {showTeacherReport && (
+                                        <div className="mt-4 bg-slate-50 rounded-xl p-4 text-left border border-slate-200 animate-in fade-in slide-in-from-top-4 duration-300">
+                                            <div className="flex items-center gap-2 mb-3 text-slate-700 font-bold border-b border-slate-200 pb-2">
+                                                <Icons.ClipboardList size={18}/>
+                                                <span>錯誤詳情紀錄</span>
+                                            </div>
+                                            <div className="max-h-48 overflow-y-auto space-y-2">
+                                                {mistakeLog.map((record, idx) => (
+                                                    <div key={idx} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100 text-sm">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="font-bold text-slate-700">{record.word.chinese}</span>
+                                                            <span className="text-xs text-red-400 font-mono bg-red-50 px-2 py-0.5 rounded">答錯</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                                                            <span className="text-slate-400">正確:</span>
+                                                            <span className="text-green-600 font-bold">{record.word.english}</span>
+                                                            <span className="text-slate-400">學生:</span>
+                                                            <span className="text-red-500 font-medium line-through decoration-red-300">{record.wrongInput}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-3">
+                                <button onClick={startQuiz} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl shadow-md flex items-center justify-center gap-2">
+                                    <Icons.RotateCcw size={20} />
+                                    再測驗一次
+                                </button>
+                                
+                                <button onClick={() => setMode('menu')} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-6 rounded-xl shadow-sm">
+                                    回到選單
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return null;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
